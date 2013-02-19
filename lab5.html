@@ -1,0 +1,215 @@
+<html>
+<head>
+<link href="css/assignments.css" rel="stylesheet" type="text/css">
+<title>Guitar Heroine</title>
+</head>
+
+<body>
+<h2>Lab 5 : Guitar Heroine - Turning Your Computer Into a Musical Instrument</h2>
+
+<blockquote style="text-align: center;">
+    <div class="c1">
+        <img src="cartoon_guitar.gif">
+    </div>
+
+    <p>
+        <cite>Figure 1. Your Computer
+        </cite>
+    </p>
+</blockquote>
+
+<h3>Introduction</h3>
+
+<p>In this lab, we will use what we have learned about sequences so far in this class to simulate the pluck of a guitar string using our computers. We will
+use the <a href="http://en.wikipedia.org/wiki/Karplus%E2%80%93Strong_string_synthesis" target="_blank">Karplus-Strong</a> algorithm, named after its developers Alexander Strong and Kevin Karplus. By the end of the lab, you will have successfully turned your computer into a fully functional musical instrument, capable of playing notes, chords, and songs, all out of a few sequences!</p>
+
+<p>This lab is an adaptation of the <a href="http://introcs.cs.princeton.edu/java/assignments/guitar.html">Guitar Heroine</a> assignment developed at Princeton by <a href="http://www.cs.princeton.edu/~appel/">Andrew Appel</a>, Jeff Bernstein, <a href="http://www.cs.princeton.edu/~maia/">Maia Ginsburg</a>, <a href="http://www.cs.princeton.edu/~ken/">Ken Steiglitz</a>, <a href="https://ccrma.stanford.edu/~ge/">Ge Wang</a>, and <a href="http://www.cs.princeton.edu/~wayne/contact/">Kevin Wayne</a>. Portions of this lab, including certain images and text, have also been adapted from the content found on this <a href="http://www.bbc.co.uk/blogs/researchanddevelopment/2010/11/mozilla-audio-data-api.shtml" target="_blank">BBC Blog Post</a>.</p>
+
+<p>
+    This lab includes two files, but all of your changes will be made to the first one.
+</p>
+
+<table cellpadding="10" cellspacing="2">
+  <tr> <td> <p> <code><a href="guitar.py">guitar.py</a></code> </p> </td>
+    <td> <p>A starter implementation for a guitar simulator.</p> </td> </tr>
+
+  <tr> <td> <p> <code><a href="server.py">server.py</a></code> </p> </td>
+    <td> <p>Functions for serving your code to a webpage.</p> </td> </tr>
+</table>
+
+<p>Before we dive into the algorithm, let's revisit some operations that we can apply to tuples that will be useful later.</p>
+
+<h3>Fun With Tuples</h3>
+
+<p>Try to guess what Python will do for the following expressions. Check your answer using the Python interpreter. (Note: remember,
+computer scientists always start counting from 0!)<p>
+
+<pre>
+>>> for item in (1,2,3,4,5):
+...   print(item * item)
+...
+
+>>> a = (1,2,3) * 3
+>>> a
+
+>>> len((1,2,3))
+
+>>> len((1, (2,3), 4))
+
+>>> b = ((1,2,3,4) + (5,6,7,8))[4]
+>>> b
+</pre>
+
+<p>For each of the following tuples, give the correct expression to get 7. </p>
+
+<pre>
+>>> x = (1, 3, (5, 7), 9)
+>>> #YOUR EXPRESSION INVOLVING x HERE
+7
+>>> y = ((7,),)
+>>> #YOUR EXPRESSION INVOLVING y HERE
+7
+>>> z = (1, (2, (3, (4, (5, (6, 7))))))
+>>> #YOUR EXPRESSION INVOLVING z HERE
+7
+</pre>
+
+<h3>Computers and Sound</h3>
+
+<p> The sounds that we hear in our day-to-day lives travel through the air as waves. When there is a disturbance in the air (like the pluck
+of a string or a clap of one's hands), the resulting pressure that is produced propogates through the air as waveform which humans can hear. A sound wave may
+thus look something like this:</p>
+
+<img src='sound_wave.png' style="display:block; margin: 30px auto;"/>
+
+<p>A sound wave is an analog signal, which means that over time it is composed of infinitely many values. Obviously, computers have limited space, and therefore cannot store an infinite number of values in memory. In order to represent a sound wave using a computer, we <b>sample</b> it at specific intervals. If you think of a wave as a continuous function f(x),
+then sampling simply means choosing certain x-values at which to compute the function, and storing the resulting y-values in a list. Therefore, to a computer, a sound wave is just a long list
+of numbers, where each number is sample of the wave at a certain time.</p>
+
+<img src='sampling.png' style="display:block; margin: 30px auto;"/>
+
+<p>As you might guess, the more samples we have, the more accurate our sound will be. The <b>sampling rate</b> is how many times per second we choose
+to sample the wave. For CD audio, this value is 44,100, which means that 44,100 data values are encoded each second, which can be written as 44.1kHz.
+
+So we know how general sound is represented, bu what about notes? Each note in the modern chromatic scale is associated with a
+certain <b>frequency</b> (measured in Hz). The frequency of a note corresponds to the number of periods of that note's sound wave that occur each second. For example, the
+49th key on a modern piano (A) has a frequency of 440 Hz. Similarly, the middle C has a frequency of about 262 Hz.</p>
+
+<h3>Plucking a Guitar String</h3>
+
+<p>Let's take a close look at what happens when we pluck a guitar string, since that is what we will be simulating in the coming exercises.
+At first, the string is highly energized and it vibrates rapidly, creating a fairly complex (meaning rich in harmonics) sound. Gradually, due to friction between the air and the string, the string's energy is depleted and the wave
+becomes less complex, resulting in a "purer" tone with fewer harmonics. After some amount of time all of the energy from the pluck is gone, and the string stops vibrating.</p>
+
+<h3>The Karplus-Strong Algorithm</h3>
+
+<p>Now that we have a physical idea of what's happening in a plucked string, how can we model it with a computer? That's where the Karplus-Strong algorithm comes into play. Here's how it works: first we start with a sequence full of random values: noise. Then, we generate new values by replicating previous ones at a particular frequency p. Mathematically, the Karplus-Strong update is defined in terms of previous samples:</p>
+
+<img src="update.png" style="display:block; margin: 30px auto;"/>
+
+<p>In the equation above, Y is a sequence of samples, and p is the frequency of the note we want to simulate (e.g., 440 for an A).  To generate samples for a note, we start with p samples of noise, then many times we add a new sample using the Karplus-Strong update. Below, the update is illustrated for p equal to 10.
+
+<img src="karplus-strong.png" style="display:block; margin: 30px auto;"/>
+
+The two primary components that make the Karplus-Strong algorithm work are the feedback mechanism and the averaging operation.
+
+<ul>
+  <li><b>The feedback mechanism.</b> The length of the update determines the fundamental frequency of the resulting sound. Sonically, the feedback mechanism reinforces only the fundamental frequency and its harmonics (frequencies at integer multiples of the fundamental). The energy decay factor (0.996 in this case) models the slight dissipation in energy as the wave makes a roundtrip through the string.
+
+  <li><b>The averaging operation.</b> The averaging operation serves as a gentle low pass filter (which removes higher frequencies while allowing lower frequencies to pass, hence the name). Because it is in the path of the feedback, this has the effect of gradually attenuating the higher harmonics while keeping the lower ones, which corresponds closely with how actually plucked strings sound.
+</ul>
+
+</p>
+
+<h3>Lists and Random Values</h3>
+
+<p>To build up a sequence incrementally, we need a sequence type to which we can add new elements.  Python tuples cannot be changed (they are <i>immutable</i>), but Python has another built in data
+structure called a <i>list</i> that is well-suited to our problem. You will learn about lists in upcoming lectures.
+
+<p>Lists and tuples share much in common, but to construct a list we use square brackets rather than parentheses. All sequence and arithmetic operations behave in the same way for tuples and lists (including slicing, addition, len). Unlike tuples, we can modify lists! For instance. we can add new elements to the end with the <i>append</i> method. Here are some practice exercises to get you familiar with lists:</p>
+
+<pre>
+>>> a = [] # empty list
+
+>>> a = a + [1,2,3]
+>>> len(a)
+
+>>> a = a * 2
+>>> a
+
+>>> a.append(4)
+>>> a
+
+>>> a[0] = 88
+>>> a
+
+>>> a[3:6] # slicing
+
+>>> a[:2] # more slicing
+</pre>
+
+<p>The last thing we need before implementing our guitar is a random number generator. Luckily, Python has a module built just for this purpose. The function <code>random</code> returns a
+random decimal value between 0 and 1:</p>
+
+<pre>
+>>> from random import random
+>>> random()
+
+>>> random()
+
+>>> random()
+</pre>
+
+
+<h3>Implementation</h3>
+
+<p>Ok, phew, enough theory. Let's start building this thing!</p>
+
+<strong>I. Noise</strong>
+
+<p>In <code>guitar_heroine.py</code>, fill in the function <code>create_noise</code>. This function takes in an argument <code>n</code> and returns a list of <code>n</code> random values between -0.5 and 0.5. Talk to a neighbor to see how you can obtain such numbers using the function <code>random</code>. </p>
+
+<strong>II. The Algorithm</strong>
+
+<p>Next, complete the function definition of <code>apply_ks</code>, which takes in an intial sequence of noise (called <code>s</code>) and applies the Karplus-Strong update to this sequence <code>n</code> times, appending a new sample each time. The frequency p is the initial length of s. Check that you pass the doctest for this function.
+
+<p>After you have completed this part, save your code and run <code>'python3 server.py'</code> from the terminal. The open Firefox and go <a href='http://localhost:8000'>localhost:8000</a>. If your code works, you should see letters on the screen followed by musical notes names. Press any letter that's listed on your keyboard to play the corresponding note.</p>
+
+<p>Notes: The keyboards have volume controls, so if you don't hear any sound, try increasing the volume first. Also, the lab machines are ancient, and so sometimes you need to refresh the page twice when you make an update in order to have the sound work. If you change your code, you will have to stop and start Python again.</p>
+
+<strong>III. Chords</strong>
+
+<p>In music, chords are sounds achieved by playing multiple notes simultaneously. Luckily, chords are easy to implement once we have notes.
+Mathematically, a chord is the superposition of its component notes. Say we want to build an C major chord (C, E, G). Each of these three notes has samples,
+and to build the chord we need to do an element wise addition of each note's samples. For example: </p>
+
+<pre>
+If  C's samples were [0.25, 0.4, 0.3, ... ]
+and E's samples were [0.25, 0.2, 0.1, ... ]
+and G's samples were [0.15, 0.1, 0.35,... ]
+
+Then the C major chord's samples would be [0.65, 0.7, 0.75, ...]
+</pre>
+
+Implement the function <code>make_chord</code>, which takes in 3 notes and returns the samples of the chord defined by these notes. To obtain the samples of a particular note
+<code>x</code>, call <code>guitar_string(x)</code>.</p>
+
+
+<strong>IV. Songs</strong>
+
+<p>We now have all the building blocks -- let's make some songs!. Your first job is to fill in the function <code>songify</code>. This function takes in a list of notes (each represented as strings), and should return a list of each note's samples, which itself is a list.
+
+After you have completed <code>songify</code>, find the function <code>make_song</code> and modify the list <code>notes</code> with a song of your choice. The list that you fill in represents
+the notes that will be played in your song sequentially. You can also use chords in your song by calling <code>make_chord</code>! The notes that we have given you begin the tune Twinkle Twinkle, with a chord inserted for demonstration purposes.</p>
+
+Once you have inserted a song, save your work and once again run <code>'python3 server.py'</code> from the terminal and navigate to <a href='http://localhost:8000'>localhost:8000</a>.
+Now hit the 'Play Song' button, and enjoy your work!</p>
+
+<p>Congratulations! You have succesfully turned your computer into a working guitar. Feel free to create more complicated tunes using your new
+creation.</p>
+
+<p><i>Developed by Varun Pai and John DeNero for CS 61A at UC Berkeley.  Based
+  on the <a href="http://nifty.stanford.edu/2012/wayne-guitar-heroine/">Guitar
+    Heroine nifty assignment</a>.</p>
+</body>
+</html>
